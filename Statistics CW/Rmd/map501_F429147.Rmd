@@ -1,0 +1,263 @@
+---
+title: "Map501_F429147"
+author: "By Keunwoo Kim"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: false
+---
+
+```{r, setup, echo = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 7,
+  fig.height = 8,
+  fig.show = "hold"
+)
+```
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+library("tidyverse")
+library("magrittr")
+library("here")
+library("janitor")
+library("gridExtra")
+library("readxl")
+library("Lahman")
+library("viridis")
+library("lindia")
+library("lme4")
+library("caret")
+library("pROC")
+library("car")
+library("dplyr")
+library("nnet")
+```
+
+```{r}
+#q1a.
+head(Managers)
+
+df_managers <- Managers %>% 
+  mutate(win_pct = W/(W + L)) %>% 
+  select(playerID, teamID, yearID, lgID, plyrMgr, win_pct)
+```
+```{r}
+#q1b.
+#b1.
+df_teams <- Teams %>% 
+  select(yearID, teamID, DivWin, CS)
+#b2.
+man_teams <- merge(df_managers, df_teams, by = c("yearID", "teamID")) %>% 
+  select(-lgID)
+#b3, 4.
+awards_man <- merge(man_teams, AwardsShareManagers, by = c("yearID", "playerID")) %>% 
+  mutate(sqr_point_pct = sqrt(pointsWon/pointsMax))
+#b5.
+summary(awards_man$teamID)
+
+awards_man <- awards_man %>%
+  drop_na() %>% 
+  mutate(teamID = droplevels((teamID)))
+head(awards_man)
+```
+```{r}
+#q1c.
+spp_mod <- lm(sqr_point_pct ~ win_pct + DivWin + CS, data = awards_man)
+summary(spp_mod)
+```
+#q1c.
+According to the coefficient's p-value, the Intercept and win_pct are meaningful as each P-value is much lower than 0.05. While the DivWin and CS’s p-values are too high to interpret as the two coefficients are meaningful. This interpretation also aligns with the adjusted r-squared. The adjusted r-squared shows whether the dependent variable is meaningful and could be trusted if the result is closer to 1. In terms of this model, the adjusted r-squared is tiny by 0.001263, which overlaps with the dependent variable DivWin and CS’s p-value. 
+The form of fitted model is sqr_point_pct = 0.41 + 0.11*win_pct + 0*DivWin - 0*CS 
+```{r}
+#q1d.
+spp_mod_plots <- spp_mod %>% 
+  gg_diagnose(plot.all = FALSE)
+
+plot_all(spp_mod_plots[1:6])
+```
+
+#q1d.
+The Residuals vs. Fitted graph shows how the fitted values distribute the residuals by the randomly distributed scatter and the shape of the red line. There should be a random distribution if the independent and dependent variables are in a linear relationship. In addition, the red line, which is the average of the residuals, should not show patterns such as a curve or U shape. In the current model’s Residuals vs. Fitted graph, the scatters do not show certain patterns and are distributed randomly around the red line. Therefore, it could be interpreted as the linearity and homoscedasticity assumptions are fulfilled. 
+Normality could be examined using the histogram and the normal QQ plot. According to the Histogram, the asymmetry is seen in the graph, which shows a downtrend from -3 to 6.  Likewise, the normal QQ plot shows a heavy-tailed distribution near -3 and +3. As the scatters deviate from the diagonal line, the Normality is not fulfilled. 
+In the Residual vs win_pct and Residual vs CS plots, the scatters are distributed with no patterns, and the red line is in a straight line from the y-axis 0. This implies that the mean average of the residual is 0. The Residual vs DivWin plot shows similar Interquartile Ranges between each category, and the median is near 0.
+Therefore, it is interpreted that the three independent variables fulfil the independence.
+```{r}
+#q1e. 
+predict(spp_mod, newdata = data.frame(win_pct = 0.8, DivWin = "Y", CS = 8))
+
+print(0.5013271^2)
+```
+#q1e.
+The result of the code first code is 0.5013271.
+sqr_point_pct is in square root. Therefore, to interpret there, the result should be squared.
+According to the model prediction, the team earned approximately 25.13% of the pointsMax.
+```{r}
+#q1f.
+confint(spp_mod)
+```
+#q1f.
+The intercept and win_pct's confidence interval are narrow, representing that both values are statistically meaningful. On the other hand, the DivWin and CS have a wide range and contain 0 in between the range. It could be interpreted as the variables do not have statistical meaning. This interpretation also explains DivWin and CS's p-value greater than 0.05 from the previous founding.
+```{r}
+#q2a.
+str(df_managers)
+summary(df_managers$plyrMgr)
+
+ggplot(df_managers, aes(x = yearID, y = as.numeric(plyrMgr))) +
+  geom_jitter(height = 0.2, width = 0) +
+  labs(x = "Year", y = "Player-manager(Y = 2, N = 1)"
+       ) +
+  ggtitle("If the manager was a player-manager or not")+
+  theme_classic()
+```
+
+#q2a.
+According to the graph, in the early 1900s, the player-manager was more common, and the player with a player-manager role ratio was higher than the ones that did not. However, as time passed, a decreasing trend in the player-manager role was observed, and approximately from the 1980s, the role disappeared. 
+```{r}
+#q2b.
+glm1 <- glm(plyrMgr~yearID, family = "binomial", data = df_managers)
+summary (glm1)
+```
+#q2b.
+According to the model summary, the p-value is significantly lower than the usual threshold of 0.05. Furthermore, the Residual Deviance has significantly decreased from 3442.4 (Null Deviance) to 2127.7 (Residual Deviance) by adding yearID as an independent variable. Considering the p-value and decrease of the residual, the yearID is statistically meaningful in predicting the plyrMgr.
+Form of fitted model is ln(p/1-p) = 88.60 - 0.047*yearID
+```{r}
+#q2c.
+set.seed(123)
+train <- c(df_managers$plyrMgr) %>%
+ createDataPartition(p = 0.8, list = FALSE)
+df_managers.train <- df_managers[train,]
+df_managers.test <- df_managers[-train,]
+
+
+train_glm1 <- glm(plyrMgr~yearID, family = "binomial", data = df_managers.train)
+
+
+predicttrain <- predict(train_glm1, newdata = df_managers.train, type = "response")
+predicttest <- predict(train_glm1,  newdata = df_managers.test, type = "response")
+
+roctrain <- roc(response = df_managers.train$plyrMgr, predictor = predicttrain, plot = TRUE, main = "ROC Curve for prediction of roctrain and roctest", auc = TRUE)
+roctest <- roc(response = df_managers.test$plyrMgr, predictor = predicttest, plot = TRUE, auc = TRUE, add =TRUE, col = 2)
+legend(0, 0.4, legend = c("training", "testing"), fill = 1:2)
+
+ggroc(roctrain, legacy.axes = FALSE) +
+  geom_abline(aes(intercept = 1, slope = 1), colour = "red") +
+  labs(title = "Roc Curve: roctrain", x = "specificity", Y = "Sensitivity" ) +
+  annotate(geom = "text", x = 0.25, y = 0.25, label = paste("AUC =", round(auc(roctrain), 3)), colour = "blue")
+ggroc(roctest, legacy.axes = FALSE) +
+  geom_abline(aes(intercept = 1, slope = 1), colour = "red") +
+  labs(title = "Roc Curve: roctest", x = "specificity", Y = "Sensitivity" ) +
+  annotate(geom = "text", x = 0.25, y = 0.25, label = paste("AUC =", round(auc(roctest), 3)), colour = "blue")
+```
+
+#q2c.
+The AUC is examined between 0 from 1. The higher AUC could be interpreted as the model showing better predictive power. Regarding the ROC curves, if the Curve breaks away from the diagonal line (random guessing) and is shaped in a curve, the model contains an adequate balance between Sensitivity and Specificity. The ROC plot for each roctrain and roctest scored AUC score each by 0.905 and 0.898. The difference in the AUC score is significantly smaller by 0.007. This means that both models showed coherently high predictive power. Furthermore, the two ROC curves are in similar shape accroding to the ROC Curve for prediction of roctrain and roctest plot. In conclusion, the model is adequate for actual application, and there is no worry of overfitting.  
+```{r}
+#q2d.
+cutoff <- coords(roctrain, "best", best.method = "youden")
+
+multi_df_managers <- multinom(plyrMgr~yearID, data = df_managers)
+
+set.seed(123)
+train1 <- c(df_managers$plyrMgr) %>%
+ createDataPartition(p = 0.8, list = FALSE)
+df_managers.train <- df_managers[train1,]
+df_managers.test <- df_managers[-train1,]
+
+train_mod1 <- multinom(plyrMgr~yearID, data = df_managers.train)
+
+predicttrain1 <- predict(train_mod1, newdata = df_managers.train, type = "class")
+predicttest1 <- predict(train_mod1, newdata = df_managers.test, type = "class")
+
+T1 <- table(predicttrain1, df_managers.train$plyrMgr)
+T2 <- table(predicttest1, df_managers.test$plyrMgr)
+T1
+T2
+
+sstrain <- T1[1, 1] / (T1[1, 1] + T1[2, 1]) +
+  T1[2, 2] / (T1[1, 2] + T1[2, 2])
+sstest <- T2[1, 1] / (T2[1, 1] + T2[2, 1])+
+  T2[2, 2] / (T2[1, 2] + T2[2, 2]) 
+sstrain
+sstest
+```
+#q2d.
+The sum of sensitivity for train and test data makes no odds. Therefore, there is a weak risk of overfitting.
+```{r}
+#q3a.
+df_pitchers <- Pitching %>% 
+  filter(IPouts > 1) %>% 
+  mutate(innings = IPouts/3) %>% 
+  drop_na()
+
+df_people <- People %>% 
+  select(playerID, weight, height, throws) %>% 
+  drop_na()
+
+df_pitchers <- merge(df_pitchers, df_people, by  = "playerID") 
+
+head(df_pitchers)
+```
+```{r}
+#q3b.
+df_pitchers %>% 
+  ggplot(aes(SHO)) +
+  geom_histogram(binwidth = 0.5) +
+  labs(
+    x = "Number of shutouts", y = "Frequency",
+    titel = "shutouts by Pitchers"
+  )
+```
+
+#q3b. 
+The Poisson Regression is an adequate model as the shutouts occur during specific periods, and at the same time, the data is count-data bigger than 0.
+```{r}
+#q3c.
+ggplot(df_pitchers, aes(x = innings, y = SHO, colour = throws)) +
+  geom_jitter(height = 0.1,) +
+  labs(x = "Innings Played",  y = "Number of Shutouts", title = "Relation of Innings played and Shutouts") +
+  theme_classic()
+```
+
+#q3c.
+As the Innings Played increased, the Number of Shutouts also grew. This trend in the graph shows a positive relationship between the variables. However, not all the pitchers showed an increase in shutouts in direct proportion to the innings. For instance, personal and team abilities could have affected the result. 
+According to the differences in the colour by type of Throws, it was spotted that most pitchers are right-handed, and switching pitchers is rare.
+```{r}
+#q3d.
+poisson_mod1 <- glm(SHO ~ innings + weight + height + throws, family = "poisson", data = df_pitchers)
+anova(poisson_mod1)
+```
+#q3d.
+The analysis of variance provides us with the deviances and p-value. By interpreting the p-value, it is possible to tell if the difference between the deviance of the null model and the actual models' deviance is significant. For instance, the innings deviance is 15315.9, and the p-value is <2.2e – 16. Under the null hypothesis, the p-value indicates the likelihood of getting that deviance by chance. Therefore, as the p-value is smaller, it signifies that the variable is more significant. 
+Weight: The deviance is 85.7, and the p-value is < 2.2e-16. Under the null hypothesis, the chance of getting the deviance (85.7) is smaller than 2.2e-16.
+Height: The deviance is 57.3, and the p-value is 3.685e-14. Under the null hypothesis, the chance of getting the deviance (57.3) is 3.685e-14.
+Throws: The deviance is 11.9, and the p-value is 0.002642. Under the null hypothesis, the chance of getting the deviance (11.9) is 0.002642.
+The four p-values for the variables are smaller than 0.05. Therefore, the null hypothesis is not accepted, and the variables are significant. However, the decrease in the deviance of height and throws is comparatively low, which could be seen as less significant than innings and weight.
+```{r}
+#q3e.
+poisson_mod2 <- glmer(SH ~ innings + weight + height + throws + (1 | teamID), family = "poisson", data = df_pitchers)
+summary(poisson_mod2)
+```
+#q3e.
+The variance of Team ID makes it possible to find the by applying square root to standard deviation. According to the code result, the standard deviation is below 0.5 by 0.2588, indicating that each team's expected shutouts do not differ much. If a particular team has more shutouts, it could increase the variance and improve the random effect. However, in this case, the variability of the team ID's random effect will be less critical. Therefore, the team ID is not a vital predictor. 
+The form of fitted model is log(μ) = − 0.52 + 0.01*innings − 0.005 * weight + 0.02 * height − 0.35 * throwsR − 0.19 * throwsS
+```{r}
+#q3f.
+plot(poisson_mod1,  which = 3)
+```
+
+#q3f.
+The graph is used to evaluate homoscedasticity. To meet homoscedasticity, the red line (mean of the residuals) should be straight, and the residuals should be randomly distributed. However, the scatters on the graph follow certain curves rather than random distribution. In addition, the red line has a precise curved shape. Furthermore, increasing the expected value increases the residuals' distribution. These unusual patterns violate homoscedasticity.
+```{r}
+#q3g.
+summary(poisson_mod1)
+exp(-0.1022)
+exp(-0.00947)
+exp(0.06247)
+```
+#q3g.
+According to the summary of the poisson_mod1, the baseline of the throws is throws L, and the exponential value of the throws R is around 90% of the expected shutout chance of throws L. Therefore, left-handed pitchers are expected to pitch 10% more times of shutouts. In terms of weight, the coefficient is negative, and the exponential value is around 0.99. Consequently, the expected chance of shutouts decreases by 1% for every unit increase. On the other hand, the height coefficient is positive, and the exponential value is around 1.06. In conclusion, around 6% of the shutout chance increases for each height unit.
+

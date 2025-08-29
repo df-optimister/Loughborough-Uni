@@ -1,0 +1,54 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+install.packages("car")
+```
+
+```{r}
+library("tidyverse")
+library("magrittr")
+library("here")
+library("janitor")
+library("gridExtra")
+library("readxl")
+library("Lahman")
+library("viridis")
+library("lindia")
+library("lme4")
+library("caret")
+library("pROC")
+library("car")
+library("dplyr")
+
+```
+```{r}
+#Q1a.
+?Managers
+
+head(Managers)
+
+df_managers <- Managers %>% 
+  mutate(win_pct = W/(W + L)) %>% 
+  select(playerID, teamID, lgID, plyrMgr, win_pct)
+```
+```{r}
+#Q1b.
+head(Teams)
+#b1
+Teams <- Teams %>% 
+  mutate(Teams_year_and_teamID = paste(yearID, teamID, sep = "/"))
+                                             
+df_teams <- Teams %>% 
+  select(Teams_year_and_teamID, DivWin, CS)
+#b2
+df_managers1 <- merge(df_managers, df_teams)
+
+man_teams <- df_managers1 %>% 
+  select(playerID, teamID, plyrMgr, win_pct, Teams_year_and_teamID, DivWin, CS)
+#b3
+awards_man <- merge(man_teams, AwardsShareManagers)
+```
+
+
