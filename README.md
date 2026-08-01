@@ -1,155 +1,99 @@
-# Tracking Enhanced VAEP
-Extending football action valuation with tracking-based spatial context, using StatsBomb 360 freeze frame data
+# Tracking-Enhanced VAEP
+
+Extending the VAEP (Valuing Actions by Estimating Probabilities) action-valuation framework with spatial context derived from StatsBomb 360 freeze-frame tracking data — built as an MSc dissertation project.
 
 ---
+
+## The Problem
+
+Standard VAEP values actions using only on-ball event data (pass, shot, dribble, ...), so it has no way to see defensive shape or off-ball movement. Two identical passes into the same space can have very different value depending on whether the defensive line is collapsing behind them — event data alone can't tell them apart. This project tests whether adding freeze-frame-derived spatial features closes that gap.
 
 ## Key Results
 
-Model selection best AUC
-Score AUC 0.866
-Concede AUC 0.842
+| | Score AUC | Concede AUC |
+|---|---|---|
+| Model selection (best config) | 0.866 | 0.842 |
+| World Cup 2022 (full tracking model) | 0.8005 | 0.8326 |
+| World Cup 2022 (without on/off features) | 0.7998 | 0.8307 |
 
-World Cup 2022 out of sample evaluation
-Full Tracking Model
-Score AUC 0.8005
-Concede AUC 0.8326
+Tracking-derived spatial features give a small but consistent AUC gain on both tasks when transferred out-of-sample to an unseen tournament. The gain is modest, not transformative — reported here as-is rather than oversold.
 
-Without On Off Features
-Score AUC 0.7998
-Concede AUC 0.8307
+## What This Project Demonstrates
 
-Tracking derived spatial features provides consistent gains in both scoring and conceding tasks.
+- **Domain-driven feature engineering**: translating a football-specific hypothesis (defensive-line collapse, off-ball runs into space) into concrete geometric features computed from raw freeze-frame coordinates
+- **A from-scratch action-valuation pipeline**: custom StatsBomb-events-to-SPADL conversion and VAEP-style gamestate features (goal-score state, speed/space deltas over the last 3 actions, polar distance/angle to goal), rather than relying solely on an existing library
+- **Leakage-aware evaluation discipline**: match-level `GroupKFold` cross-validation, a strict train/tournament split, and out-of-sample testing on a full unseen tournament (World Cup 2022) rather than a random holdout
+- **Structured experimentation**: feature parameter sweep → hyperparameter tuning (`RandomizedSearchCV`) → ablation analysis, each isolating one variable at a time
+- **Independent applied-ML research**: scoped, built, and evaluated solo as a dissertation project, from raw event data to a tournament-transfer result
 
----
+## Pipeline
 
-## What This Project Is
-
-A reproducible end-to-end football action valuation pipeline that augments the original VAEP framework with StatsBomb 360 freeze frame context.
-
-This repo is designed to demonstrate
-sports domain understanding
-tracking-based feature engineering
-structured experimentation
-tournament transferable evaluation
-action, player, and team level outputs
-
----
-
-## Pipeline Walkthrough
+```
+StatsBomb events (Euro 2020 + World Cup 2022, via statsbombpy)
+        │
+        ▼
+1. Custom SPADL-style action conversion  ──  my_SPADL_Converter-1.ipynb
+        │
+        ▼
+2. Merge StatsBomb 360 freeze frames, derive
+   defensive-line-gap / collapse / off-ball
+   contribution features                  ──  On_Offball_Features_Merge-2.ipynb
+        │
+        ▼
+3. VAEP-style gamestate features + score/concede labels
+   (goalscore diff, space delta, speed, time delta, ...) ── Convert_into_Features_and_Labels-3.ipynb
+        │
+        ▼
+4. Model selection, feature sweep, hyperparameter tuning
+   (CatBoost / XGBoost, GroupKFold, RandomizedSearchCV)  ──  Paramtest_and_Pred_result-4.ipynb
+        │
+        ▼
+5. World Cup 2022 out-of-sample evaluation + ablation    ──  Experiment-5.ipynb
+```
 
 ![Pipeline Walkthrough](tracking_enhanced_vaep_pipeline_final_scroll.gif)
 
----
+## Repository Structure
+
+```
+Dissertation Code/vaep_code/
+  my_SPADL_Converter-1.ipynb              Stage 1 — event → action conversion
+  On_Offball_Features_Merge-2.ipynb       Stage 2 — freeze-frame defensive/off-ball features
+  Convert_into_Features_and_Labels-3.ipynb  Stage 3 — VAEP gamestate features + labels
+  Paramtest_and_Pred_result-4.ipynb       Stage 4 — model selection & tuning
+  Experiment-5.ipynb                      Stage 5 — out-of-sample evaluation & ablation
+README.md
+tracking_enhanced_vaep_pipeline_final.png
+tracking_enhanced_vaep_pipeline_final_scroll.gif
+```
 
 ## Data
 
-Training
-Euro 2020
+- **Training**: Euro 2020 (StatsBomb open data)
+- **Out-of-sample evaluation**: World Cup 2022 (StatsBomb open data)
+- **Source**: StatsBomb event data + StatsBomb 360 freeze frames, via [`statsbombpy`](https://github.com/statsbomb/statsbombpy)
 
-Out of sample evaluation
-World Cup 2022
+> StatsBomb 360 freeze frames don't always carry stable identifiers for every off-ball player, so off-ball contribution is best read as a team-level defensive-shape signal rather than fully attributable individual credit.
 
-Source
-StatsBomb event data plus StatsBomb 360 freeze frame
+## How to Reproduce
 
-Note
-StatsBomb 360 freeze frame does not always provide stable identifiers for all off-ball players, so off-ball contribution is best interpreted as a team-level context feature rather than a fully attributable individual off-ball credit assignment.
+Notebooks were written for Google Colab (Drive-mounted paths) and are meant to be run in order; each stage reads the previous stage's saved output:
 
----
+1. `Dissertation Code/vaep_code/my_SPADL_Converter-1.ipynb` — pulls StatsBomb events, converts to action table
+2. `Dissertation Code/vaep_code/On_Offball_Features_Merge-2.ipynb` — merges 360 freeze frames, computes collapse/off-ball features
+3. `Dissertation Code/vaep_code/Convert_into_Features_and_Labels-3.ipynb` — builds VAEP-style features and score/concede labels
+4. `Dissertation Code/vaep_code/Paramtest_and_Pred_result-4.ipynb` — model selection, feature sweep, hyperparameter tuning
+5. `Dissertation Code/vaep_code/Experiment-5.ipynb` — World Cup 2022 evaluation and ablation
 
-## Modelling Discipline
-
-GroupKFold cross-validation by match to reduce leakage  
-Strict tournament split between training and evaluation  
-Feature parameter sweep before hyperparameter tuning  
-Ablation analysis to isolate the marginal contribution of tracking features  
-
-This mirrors production-grade workflows used in professional football analytics, betting feature pipelines, and model governance settings.
-
----
-
-## Repository Structure
-
-The project is organised into modular stages aligned with the modelling pipeline.
-
-
----
-
-## How To Reproduce
-
-Run notebooks in order
-
-1, SPADL conversion  
-`notebooks/1_my_SPADL_Converter.ipynb`
-
-2, Merge 360 context and build on off-ball features  
-`notebooks/2_On_Offball_Features_Merge.ipynb`
-
-3, Convert to modelling features and labels  
-`notebooks/3_Convert_into_Features_and_Labels.ipynb`
-
-4, Model selection, feature sweep, tuning, prediction  
-`notebooks/4_Paramtest_and_Pred_result.ipynb`
-
-5, Experiments and reporting outputs  
-`notebooks/5_Experiment.ipynb`
-
-Outputs will be written into `outputs/` and include
-model selection and sweep tables
-World Cup 2022 prediction and evaluation files
-VAEP action, player, team aggregates for each ablation variant
-
----
-
-## Experiment Stages
-
-Stage 1, Model selection  
-`outputs/stage1_model_results.csv`
-
-Stage 2, Structural feature sweep  
-`outputs/stage2_feature_sweep_metrics.csv`  
-Best setting  
-`outputs/stage2_best_feature_combo.json`  
-line_gap 5  
-in_line_gap 5  
-nr_actions 5  
-model catboost
-
-Stage 3, Hyperparameter tuning  
-`outputs/stage3_hyperparam_results.csv`
-
-Stage 4, Ablation analysis  
-`outputs/stage4_ablation_metrics.csv`  
-Full model vs No on off vs On only
-
----
-
-## Why This Matters
-
-Event-only valuation often ignores defensive structure and off-ball movement.  
-By modelling defensive collapse patterns and dribble impact using freeze frame context, this pipeline supports
-
-context-aware player valuation  
-more robust team strength assessment  
-feature inputs for betting models  
-recruitment and scouting decision support  
-match preparation benchmarking  
-
----
+If running outside Colab, swap the `/content/drive/MyDrive/...` paths in each notebook for local paths. Intermediate/output files (HDF5 feature stores, result tables) are written to those configured paths and aren't checked into this repo.
 
 ## Tech Stack
 
-Python  
-Pandas, NumPy  
-Scikit learn  
-CatBoost, XGBoost  
-Notebook based modular pipeline
-
----
+Python · Pandas · NumPy · scikit-learn · CatBoost · XGBoost · `statsbombpy` · Jupyter/Colab notebooks
 
 ## Contact
 
-If you are hiring for sports data science, football analytics, or betting modelling roles, feel free to reach out.
+If you're hiring for football analytics, sports data science, or applied ML roles, feel free to reach out.
 
-LinkedIn: https://www.linkedin.com/in/keunwoo-kim-78138820b/  
+LinkedIn: https://www.linkedin.com/in/keunwoo-kim-78138820b/
 Email: mroptimister@gmail.com
