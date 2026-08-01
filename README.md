@@ -12,11 +12,13 @@ Standard VAEP values actions using only on-ball event data (pass, shot, dribble,
 
 | | Score AUC | Concede AUC |
 |---|---|---|
-| Model selection (best config) | 0.866 | 0.842 |
-| World Cup 2022 (full tracking model) | 0.8005 | 0.8326 |
-| World Cup 2022 (without on/off features) | 0.7998 | 0.8307 |
+| Base model comparison (CatBoost vs. Logistic Regression / XGBoost) | 0.851 | 0.800 |
+| Ablation on Euro 2020 — **with** on/off-ball tracking features | 0.8005 | 0.8326 |
+| Ablation on Euro 2020 — **without** on/off-ball tracking features | 0.7998 | 0.8307 |
+| World Cup 2022, true out-of-sample — **with** tracking features | 0.8468 | 0.8116 |
+| World Cup 2022, true out-of-sample — **without** tracking features | 0.8430 | 0.8116 |
 
-Tracking-derived spatial features give a small but consistent AUC gain on both tasks when transferred out-of-sample to an unseen tournament. The gain is modest, not transformative — reported here as-is rather than oversold.
+Tracking features give a small, consistent gain on the scoring task in both the Euro 2020 ablation and the World Cup 2022 out-of-sample transfer. On the conceding task, the Euro 2020 gain (0.8326 vs 0.8307) doesn't hold out-of-sample — both variants tie at 0.8116 on World Cup 2022. That gap between in-sample ablation and out-of-sample transfer is reported as-is rather than smoothed over; see [Limitations](#limitations) for the most likely reason.
 
 ## Player & Team Valuation (Stage 5 — World Cup 2022)
 
@@ -45,17 +47,26 @@ This ranks the eventual champions highest and the fourth-place finisher lowest, 
 
 Messi and Kostić only enter the top 5 once the on/off-ball tracking features are removed — the tracking-enhanced attribution doesn't just move the AUC by a fraction of a point, it changes who the model says was most valuable. That's the practically relevant result for a scouting/recruitment use case, not the headline metric.
 
-**VAEP vs. xG, for the ON-ONLY top 5**
+**VAEP vs. xG vs. actual goals, for the ON-ONLY top 5**
 
-| Player | VAEP/match | xG/match |
+| Player | VAEP/match | xG/match | Goals (tournament) |
+|---|---|---|---|
+| Lozano | 0.450 | 0.080 | 0 |
+| Musiala | 0.413 | 0.357 | 0 |
+| Gnabry | 0.394 | 0.243 | 1 |
+| De Bruyne | 0.378 | 0.059 | 0 |
+| Pulisic | 0.378 | 0.194 | 1 |
+
+Lozano ranks #1 by VAEP despite scoring zero goals and posting the second-lowest xG of the five — including one player (De Bruyne) with more goals and higher xG but a lower VAEP score. Musiala's VAEP tracks his own shot threat closely; Lozano's and De Bruyne's don't — in this model, their value comes from progression and chance creation rather than direct shooting threat, which an xG-or-goals-only view would miss entirely.
+
+**Does the tracking-enhanced ranking track real-world value better? (Transfermarkt 2023 market values, as an external sanity check)**
+
+| Top-5 set | Players | Combined market value |
 |---|---|---|
-| Lozano | 0.450 | 0.080 |
-| Musiala | 0.413 | 0.357 |
-| Gnabry | 0.394 | 0.243 |
-| De Bruyne | 0.378 | 0.059 |
-| Pulisic | 0.378 | 0.194 |
+| ON-ONLY (with on-ball contribution feature) | Lozano, Musiala, Gnabry, De Bruyne, Pulisic | €292m |
+| NO-ONOFF (baseline, without on-ball contribution) | Lozano, Musiala, Gnabry, Messi, Kostić | €257m |
 
-Musiala's VAEP tracks his own shot threat closely. Lozano and De Bruyne rank just as highly on VAEP with far lower xG — in this model, their value comes from progression and chance creation rather than direct shooting threat, which an xG-only view would miss entirely.
+Adding the on-ball contribution feature swaps Messi and Kostić out of the top 5 for De Bruyne and Pulisic, and the resulting top 5 carries about €35m more combined market value. This is a 5-player comparison, not a statistical test — but it's a directionally useful, independent check that the tracking-enhanced ranking leans closer to how the market independently prices these players.
 
 ## What This Project Demonstrates
 
@@ -115,6 +126,12 @@ tracking_enhanced_vaep_pipeline_final_scroll.gif
 - **Source**: StatsBomb event data + StatsBomb 360 freeze frames, via [`statsbombpy`](https://github.com/statsbomb/statsbombpy)
 
 > StatsBomb 360 freeze frames don't always carry stable identifiers for every off-ball player, so off-ball contribution is best read as a team-level defensive-shape signal rather than fully attributable individual credit.
+
+## Limitations
+
+- **Stage 4 (`Paramtest_and_Pred_result-4.ipynb`) uses a simplified fallback feature pipeline** rather than importing directly from Stages 2–3, because the intermediate hand-off wasn't clearly documented at the time. The fallback keeps the core on/off-ball contribution features but drops two things the design called for: bonus scoring when an on/off-ball action leads to a shot or goal within the action window, and full 3-previous-action gamestate context. This is the most likely reason the tracking gain is modest and doesn't fully hold out-of-sample on the conceding task.
+- **Off-ball attribution is team-level only.** StatsBomb 360 freeze frames don't reliably identify every off-ball player, so off-ball contribution couldn't be attributed to individuals — only used in team-level analysis.
+- **Only 3 structural parameters were swept** (`line_gap`, `in_line_gap`, `nr_actions`). Other parameters that shape the defensive-line/collapse detection (`x_threshold`, `y_tolerance`) were held fixed rather than tuned.
 
 ## How to Reproduce
 
