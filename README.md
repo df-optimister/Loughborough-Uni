@@ -1,7 +1,7 @@
 # Tracking Enhanced VAEP
 Extending football action valuation with tracking-based spatial context, using StatsBomb 360 freeze frame data
 
-![Tracking Enhanced VAEP Pipeline](tracking_enhanced_vaep_pipeline_final.png)
+---
 
 ## Key Results
 
